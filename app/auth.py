@@ -3,14 +3,18 @@ import secrets
 
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.database import get_db
+from app.models import User
 
 
 settings = get_settings()
 bearer_auth = HTTPBearer(auto_error=False, scheme_name="BearerAuth", description="JWT bearer token for authenticated operations.")
+api_key_auth = APIKeyHeader(auto_error=False, name="X-API-Key", scheme_name="ApiKeyAuth", description="User API key for authenticated operations.")
 
 
 def generate_api_key() -> str:
@@ -34,11 +38,22 @@ def decode_user_token(token: str) -> str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "UNAUTHORIZED", "message": "Invalid or expired token"}) from exc
 
 
-def get_current_user_id(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_auth)) -> str:
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "UNAUTHORIZED", "message": "Missing Bearer token"})
-    token = credentials.credentials
-    return decode_user_token(token)
+def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_auth),
+    api_key: str | None = Depends(api_key_auth),
+    db: Session = Depends(get_db),
+) -> str:
+    if credentials is not None:
+        token = credentials.credentials
+        return decode_user_token(token)
+
+    if api_key:
+        user = db.query(User).filter(User.api_key == api_key).first()
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "UNAUTHORIZED", "message": "Invalid API key"})
+        return user.id
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "UNAUTHORIZED", "message": "Missing Bearer token or X-API-Key"})
 
 
 def require_user(user_id: str, current_user_id: str = Depends(get_current_user_id)) -> str:

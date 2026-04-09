@@ -616,8 +616,7 @@ paths:
                     code: "CENTRAL_BANK_UNAVAILABLE"
                     message: "Central bank is temporarily unavailable. Using cached directory data for routing."
 
-    /transfers (get):
-      get:
+    get:
         tags:
           - Transfers
         summary: List and filter transfers

@@ -34,6 +34,7 @@ def test_register_and_lookup_flow():
         json={"fullName": "Jane Doe", "email": "jane@example.com"},
     )
     assert register.status_code == 201
+    assert register.headers.get("X-API-Key")
     user = register.json()
 
     create_account = client.post(
@@ -212,4 +213,19 @@ def test_list_transfers_with_filters():
     assert list_filtered.status_code == 200
     filtered_data = list_filtered.json()
     assert all(t["sourceAccount"] == acc1["accountNumber"] or t["destinationAccount"] == acc1["accountNumber"] for t in filtered_data["transfers"])
+
+
+def test_api_key_authentication_on_protected_endpoint():
+    register = client.post("/api/v1/users", json={"fullName": "Api Key User", "email": "apikey@example.com"})
+    assert register.status_code == 201
+    user_id = register.json()["userId"]
+    api_key = register.headers.get("X-API-Key")
+    assert api_key
+
+    create_account = client.post(
+        f"/api/v1/users/{user_id}/accounts",
+        headers={"X-API-Key": api_key},
+        json={"currency": "EUR"},
+    )
+    assert create_account.status_code == 201
 

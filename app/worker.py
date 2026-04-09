@@ -1,5 +1,6 @@
 import asyncio
 from datetime import timedelta
+import logging
 
 from app.central_bank import (
     build_interbank_jwt,
@@ -16,6 +17,7 @@ from app import services
 
 
 settings = get_settings()
+logger = logging.getLogger("branch_bank.worker")
 
 
 async def heartbeat_loop() -> None:
@@ -23,8 +25,8 @@ async def heartbeat_loop() -> None:
         db = SessionLocal()
         try:
             await send_heartbeat(db)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("worker.heartbeat.failed error=%s", exc)
         finally:
             db.close()
         await asyncio.sleep(settings.heartbeat_interval_seconds)
@@ -35,8 +37,8 @@ async def sync_loop() -> None:
         db = SessionLocal()
         try:
             await refresh_banks_cache(db)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("worker.sync.failed error=%s", exc)
         finally:
             db.close()
         await asyncio.sleep(settings.bank_sync_interval_seconds)
@@ -51,6 +53,7 @@ async def pending_retry_loop() -> None:
                 if transfer.pending_since and services.now_utc() - transfer.pending_since > timedelta(hours=settings.pending_timeout_hours):
                     services.mark_timeout_and_refund(db, transfer)
                     db.commit()
+                    logger.warning("worker.transfer.timeout transfer_id=%s", transfer.transfer_id)
                     continue
 
                 destination_prefix = transfer.destination_account[:3]
@@ -58,6 +61,7 @@ async def pending_retry_loop() -> None:
                 if destination_bank is None:
                     services.set_next_retry(transfer)
                     db.commit()
+                    logger.info("worker.transfer.retry_scheduled transfer_id=%s reason=missing_destination_bank", transfer.transfer_id)
                     continue
 
                 source_bank_id = get_local_bank_id(db)
@@ -79,9 +83,11 @@ async def pending_retry_loop() -> None:
                         rate_ts=transfer.rate_captured_at,
                     )
                     db.commit()
+                    logger.info("worker.transfer.completed transfer_id=%s", transfer.transfer_id)
                 except Exception:
                     services.set_next_retry(transfer)
                     db.commit()
+                    logger.info("worker.transfer.retry_scheduled transfer_id=%s reason=destination_unavailable", transfer.transfer_id)
         finally:
             db.close()
 

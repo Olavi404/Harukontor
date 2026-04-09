@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 from decimal import Decimal
+import logging
 import re
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_
@@ -48,6 +49,7 @@ from app.schemas import (
 
 
 settings = get_settings()
+logger = logging.getLogger("branch_bank")
 
 
 @asynccontextmanager
@@ -72,6 +74,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     openapi_tags=[
+        {"name": "System", "description": "Service metadata and health endpoints"},
         {"name": "Users", "description": "User registration and profile operations"},
         {"name": "Accounts", "description": "Account creation and lookup operations"},
         {"name": "Transfers", "description": "Fund transfer operations"},
@@ -95,7 +98,7 @@ async def request_validation_exception_handler(_: Request, exc: RequestValidatio
     return JSONResponse(status_code=400, content={"code": "INVALID_REQUEST", "message": message})
 
 
-@app.get("/", include_in_schema=False)
+@app.get("/", tags=["System"])
 def root():
     return {
         "service": "Branch Bank API",
@@ -107,7 +110,7 @@ def root():
 
 
 @app.post("/api/v1/users", status_code=201, response_model=UserRegistrationResponse, responses={400: {"model": ErrorOut}, 409: {"model": ErrorOut}})
-def register_user(payload: UserRegistrationRequest, db: Session = Depends(get_db)):
+def register_user(payload: UserRegistrationRequest, response: Response, db: Session = Depends(get_db)):
     if payload.email:
         existing = db.query(User).filter(User.email == payload.email).first()
         if existing:
@@ -118,6 +121,8 @@ def register_user(payload: UserRegistrationRequest, db: Session = Depends(get_db
     db.add(user)
     db.commit()
     db.refresh(user)
+    response.headers["X-API-Key"] = api_key
+    logger.info("user.registered user_id=%s email=%s", user.id, user.email or "")
     return UserRegistrationResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
 
 
@@ -155,6 +160,7 @@ def create_account(userId: str, payload: AccountCreationRequest, current_user_id
     db.add(account)
     db.commit()
     db.refresh(account)
+    logger.info("account.created user_id=%s account=%s currency=%s", userId, account.account_number, account.currency)
     return AccountCreationResponse(accountNumber=account.account_number, ownerId=account.owner_id, currency=account.currency, balance=f"{account.balance:.2f}", createdAt=account.created_at)
 
 
@@ -182,6 +188,7 @@ async def initiate_transfer(payload: TransferRequest, current_user_id: str = Dep
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Source account does not belong to authenticated user"})
 
     services.ensure_transfer_not_duplicate(db, payload.transferId)
+    logger.info("transfer.initiated transfer_id=%s source=%s destination=%s", payload.transferId, source_acc_num, destination_acc_num)
 
     source_prefix = source_acc_num[:3]
     destination_prefix = destination_acc_num[:3]
@@ -194,6 +201,7 @@ async def initiate_transfer(payload: TransferRequest, current_user_id: str = Dep
         transfer = services.debit_credit_same_bank(db, payload.transferId, source, destination, amount)
         db.commit()
         db.refresh(transfer)
+        logger.info("transfer.completed transfer_id=%s mode=same_bank", transfer.transfer_id)
         return TransferResponse(
             transferId=transfer.transfer_id,
             status=transfer.status,
@@ -246,7 +254,9 @@ async def initiate_transfer(payload: TransferRequest, current_user_id: str = Dep
         services.finalize_completed_transfer(transfer, converted_amount=converted_amount if converted_amount != amount else None, exchange_rate=exchange_rate, rate_ts=rate_captured_at)
         db.commit()
         db.refresh(transfer)
+        logger.info("transfer.completed transfer_id=%s mode=interbank destination_bank=%s", transfer.transfer_id, destination_bank_id)
     except Exception:
+        logger.warning("transfer.pending transfer_id=%s destination_bank=%s", transfer.transfer_id, destination_bank_id)
         raise HTTPException(status_code=503, detail={"code": "DESTINATION_BANK_UNAVAILABLE", "message": "Destination bank is temporarily unavailable. Transfer has been queued for retry."})
 
     return TransferResponse(
@@ -296,6 +306,7 @@ def receive_interbank_transfer(payload: InterBankTransferRequest, db: Session = 
     db.commit()
 
     db.refresh(transfer)
+    logger.info("transfer.received transfer_id=%s destination=%s", transfer.transfer_id, transfer.destination_account)
     return InterBankTransferResponse(transferId=transfer.transfer_id, status=transfer.status, destinationAccount=transfer.destination_account, amount=f"{transfer.amount:.2f}", timestamp=transfer.timestamp)
 
 
@@ -397,7 +408,7 @@ def list_transfers(
     return TransfersListResponse(transfers=transfer_items, total=total, limit=limit, offset=offset)
 
 
-@app.get("/health", include_in_schema=False)
+@app.get("/health", tags=["System"])
 def health():
     return {"status": "ok", "service": settings.app_name}
 

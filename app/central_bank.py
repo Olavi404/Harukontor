@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
+import logging
 from pathlib import Path
 import secrets
 
@@ -18,6 +19,7 @@ from app.models import AppState, BankCache
 
 
 settings = get_settings()
+logger = logging.getLogger("branch_bank.central")
 PRIVATE_KEY_FILE = Path(settings.keys_dir) / "bank_private_key.pem"
 PUBLIC_KEY_FILE = Path(settings.keys_dir) / "bank_public_key.pem"
 
@@ -54,13 +56,32 @@ async def register_bank(db: Session) -> str:
         if response.status_code not in (200, 201, 409):
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "CENTRAL_BANK_UNAVAILABLE", "message": "Bank registration failed"})
         if response.status_code == 409:
-            # Duplicate registration can happen after restart; use configured or cached value.
+            # Duplicate registration can happen after restart; use cached/configured value,
+            # then fall back to registry lookup by public address.
             state = db.get(AppState, "bank_id")
             if state:
                 return state.value
             if settings.bank_registration_id:
                 return settings.bank_registration_id
-            raise HTTPException(status_code=503, detail={"code": "CENTRAL_BANK_UNAVAILABLE", "message": "Duplicate registration and no local bankId"})
+            try:
+                banks_resp = await client.get(f"{settings.central_bank_base_url}/banks")
+                banks_resp.raise_for_status()
+                banks_payload = banks_resp.json()
+                for bank in banks_payload.get("banks", []):
+                    if bank.get("address", "").rstrip("/") == settings.bank_public_url.rstrip("/"):
+                        bank_id = bank["bankId"]
+                        cached = db.get(AppState, "bank_id")
+                        if cached is None:
+                            cached = AppState(key="bank_id", value=bank_id)
+                            db.add(cached)
+                        else:
+                            cached.value = bank_id
+                        db.commit()
+                        logger.info("central.registration.recovered bank_id=%s", bank_id)
+                        return bank_id
+            except Exception:
+                pass
+            raise HTTPException(status_code=503, detail={"code": "CENTRAL_BANK_UNAVAILABLE", "message": "Duplicate registration and no resolvable local bankId"})
         bank_id = response.json()["bankId"]
         state = db.get(AppState, "bank_id")
         if state is None:
@@ -69,6 +90,7 @@ async def register_bank(db: Session) -> str:
         else:
             state.value = bank_id
         db.commit()
+        logger.info("central.registration.success bank_id=%s", bank_id)
         return bank_id
 
 
@@ -86,6 +108,7 @@ async def send_heartbeat(db: Session) -> None:
     body = {"timestamp": now_utc().isoformat()}
     async with httpx.AsyncClient(timeout=10.0) as client:
         await client.post(f"{settings.central_bank_base_url}/banks/{bank_id}/heartbeat", json=body)
+    logger.info("central.heartbeat.sent bank_id=%s", bank_id)
 
 
 async def refresh_banks_cache(db: Session) -> None:
@@ -116,6 +139,7 @@ async def refresh_banks_cache(db: Session) -> None:
             row.status = bank.get("status", "active")
             row.last_synced_at = synced_at
     db.commit()
+    logger.info("central.cache.refreshed banks=%d", len(payload.get("banks", [])))
 
 
 def resolve_destination_bank_from_cache(db: Session, destination_prefix: str) -> BankCache | None:
