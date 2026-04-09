@@ -195,7 +195,7 @@ paths:
         - User specifies the desired currency for the account
         - Branch bank generates a unique 8-character account number
         - Account number format: `{BANK_PREFIX}{UNIQUE_SUFFIX}` (3 + 5 characters)
-        - Initial balance is set to 0.00
+        - Initial balance is set to 10.00
 
         **Account Number Rules:**
         - Account numbers must be exactly 8 characters
@@ -249,7 +249,7 @@ paths:
                     accountNumber: "EST12345"
                     ownerId: "user-550e8400-e29b-41d4-a716-446655440000"
                     currency: "EUR"
-                    balance: "0.00"
+                    balance: "10.00"
                     createdAt: "2026-04-02T11:15:15Z"
         '400':
           description: Invalid request
@@ -894,9 +894,9 @@ components:
             - Negative values represent overdrafts (if supported by the bank)
 
             **Initial Balance:**
-            Newly created accounts start with a balance of "0.00".
+            Newly created accounts start with a balance of "10.00".
           pattern: '^-?\d+\.\d{2}$'
-          example: "0.00"
+          example: "10.00"
         createdAt:
           type: string
           format: date-time

@@ -309,6 +309,21 @@ def test_issue_bearer_token_from_api_key_and_use_for_protected_endpoint():
     assert create.status_code == 201
 
 
+def test_new_account_gets_default_balance_10_eur():
+    register = client.post("/users", json={"fullName": "Bonus User", "email": "bonus.user@example.com"})
+    assert register.status_code == 201
+    user_id = register.json()["userId"]
+    api_key = register.headers.get("X-API-Key")
+
+    create = client.post(
+        f"/users/{user_id}/accounts",
+        headers={"X-API-Key": api_key},
+        json={"currency": "EUR"},
+    )
+    assert create.status_code == 201
+    assert create.json()["balance"] == "10.00"
+
+
 def test_multiple_users_and_same_and_cross_bank_transfers(monkeypatch):
     sender = client.post("/api/v1/users", json={"fullName": "Transfer Sender", "email": "sender@example.com"})
     same_bank_receiver = client.post("/api/v1/users", json={"fullName": "Local Receiver", "email": "local@example.com"})

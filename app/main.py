@@ -226,7 +226,8 @@ def create_account(userId: str, payload: AccountCreationRequest, current_user_id
     if currency not in services.supported_currency_set():
         raise HTTPException(status_code=400, detail={"code": "UNSUPPORTED_CURRENCY", "message": f"Currency '{currency}' is not supported by this bank"})
     account_number = services.create_unique_account_number(db, settings.bank_prefix)
-    account = Account(account_number=account_number, owner_id=userId, currency=currency, balance=Decimal("0.00"))
+    # Assignment requirement: every newly created account starts with 10.00.
+    account = Account(account_number=account_number, owner_id=userId, currency=currency, balance=Decimal("10.00"))
     db.add(account)
     db.commit()
     db.refresh(account)
