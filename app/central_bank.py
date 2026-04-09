@@ -9,6 +9,7 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import HTTPException, status
+from jwt import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -151,14 +152,21 @@ def build_interbank_jwt(transfer_id: str, source_account: str, destination_accou
 
 
 def verify_interbank_jwt(db: Session, token: str) -> dict:
-    unverified = jwt.decode(token, options={"verify_signature": False})
+    try:
+        unverified = jwt.decode(token, options={"verify_signature": False})
+    except InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Invalid inter-bank JWT"}) from exc
+
     source_bank_id = unverified.get("sourceBankId")
     if not source_bank_id:
         raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Missing sourceBankId in JWT"})
     bank = db.get(BankCache, source_bank_id)
     if bank is None:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Source bank is not trusted"})
-    return jwt.decode(token, bank.public_key, algorithms=["ES256"])
+    try:
+        return jwt.decode(token, bank.public_key, algorithms=["ES256"])
+    except InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Invalid inter-bank JWT signature or payload"}) from exc
 
 
 async def post_interbank_transfer(destination_bank_address: str, jwt_token: str) -> dict:

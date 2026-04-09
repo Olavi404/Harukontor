@@ -141,3 +141,8 @@ def test_receive_interbank_transfer_endpoint(client, db_session):
     receive_again = client.post("/api/v1/transfers/receive", json={"jwt": token})
     assert receive_again.status_code == 200
     assert receive_again.json()["transferId"] == transfer_id
+
+
+def test_receive_interbank_transfer_invalid_jwt_returns_auth_error(client):
+    response = client.post("/api/v1/transfers/receive", json={"jwt": "test"})
+    assert response.status_code in (401, 403)
