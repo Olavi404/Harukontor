@@ -269,6 +269,46 @@ def test_transfer_rejects_same_source_and_destination_account():
     assert body["code"] == "INVALID_REQUEST"
 
 
+def test_validation_errors_return_422_http_validation_error_shape():
+    bad_user = client.post("/users", json={"fullName": "A", "email": "not-an-email"})
+    assert bad_user.status_code == 422
+    assert isinstance(bad_user.json().get("detail"), list)
+
+    ok_user = client.post("/api/v1/users", json={"fullName": "Validation Owner", "email": "validation.owner@example.com"})
+    assert ok_user.status_code == 201
+    api_key = ok_user.headers.get("X-API-Key")
+    user_id = ok_user.json()["userId"]
+
+    bad_currency = client.post(
+        f"/users/{user_id}/accounts",
+        headers={"X-API-Key": api_key},
+        json={"currency": "eur"},
+    )
+    assert bad_currency.status_code == 422
+    assert isinstance(bad_currency.json().get("detail"), list)
+
+
+def test_issue_bearer_token_from_api_key_and_use_for_protected_endpoint():
+    register = client.post("/users", json={"fullName": "Token Flow User", "email": "token.flow@example.com"})
+    assert register.status_code == 201
+    user_id = register.json()["userId"]
+    api_key = register.headers.get("X-API-Key")
+    assert api_key
+
+    issue = client.post("/auth/token", json={"apiKey": api_key})
+    assert issue.status_code == 200
+    token = issue.json()["accessToken"]
+    assert issue.json()["tokenType"] == "Bearer"
+    assert issue.json()["expiresInSeconds"] > 0
+
+    create = client.post(
+        f"/users/{user_id}/accounts",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"currency": "EUR"},
+    )
+    assert create.status_code == 201
+
+
 def test_multiple_users_and_same_and_cross_bank_transfers(monkeypatch):
     sender = client.post("/api/v1/users", json={"fullName": "Transfer Sender", "email": "sender@example.com"})
     same_bank_receiver = client.post("/api/v1/users", json={"fullName": "Local Receiver", "email": "local@example.com"})

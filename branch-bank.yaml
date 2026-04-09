@@ -132,6 +132,55 @@ paths:
                   value:
                     code: "DUPLICATE_USER"
                     message: "A user with this email address is already registered"
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+
+  /auth/token:
+    post:
+      tags:
+        - Users
+      summary: Exchange API key for Bearer token
+      description: |
+        Exchanges a user API key for a short-lived JWT Bearer token.
+
+        This endpoint completes the documented BearerAuth flow for clients that
+        prefer bearer tokens over direct X-API-Key authentication.
+      operationId: issueAuthToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenExchangeRequest'
+            examples:
+              issueToken:
+                summary: Exchange API key for token
+                value:
+                  apiKey: "bk_example_api_key"
+      responses:
+        '200':
+          description: Bearer token issued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExchangeResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 
   /users/{userId}/accounts:
     post:
@@ -161,6 +210,7 @@ paths:
       operationId: createAccount
       security:
         - BearerAuth: []
+        - ApiKeyAuth: []
       parameters:
         - name: userId
           in: path
@@ -254,6 +304,12 @@ paths:
                   value:
                     code: "USER_NOT_FOUND"
                     message: "User with ID 'user-550e8400-e29b-41d4-a716-446655440000' not found"
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 
   /accounts/{accountNumber}:
     get:
@@ -388,6 +444,7 @@ paths:
       operationId: initiateTransfer
       security:
         - BearerAuth: []
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -571,6 +628,7 @@ paths:
       operationId: getTransferStatus
       security:
         - BearerAuth: []
+        - ApiKeyAuth: []
       parameters:
         - name: transferId
           in: path
@@ -710,6 +768,59 @@ components:
             **Note:** This timestamp is stored on the branch bank server and reflects
             the server's clock at the time of registration.
           example: "2026-04-02T11:15:00Z"
+
+    TokenExchangeRequest:
+      type: object
+      properties:
+        apiKey:
+          type: string
+          description: User API key from X-API-Key registration response header
+          example: "bk_example_api_key"
+
+    TokenExchangeResponse:
+      type: object
+      required:
+        - accessToken
+        - tokenType
+        - expiresInSeconds
+      properties:
+        accessToken:
+          type: string
+          description: Signed JWT bearer token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        tokenType:
+          type: string
+          example: "Bearer"
+        expiresInSeconds:
+          type: integer
+          minimum: 1
+          example: 7200
+
+    ValidationError:
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+        type:
+          type: string
+
+    HTTPValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
 
     AccountCreationRequest:
       type: object
@@ -1073,8 +1184,14 @@ components:
 
         **Not Required For:**
         - User registration (POST /users) - initial signup is open
+        - Token issue (POST /auth/token) - authenticated via API key
         - Account lookup (GET /accounts/{accountNumber}) - unauthenticated for verification
         - Inter-bank transfer reception (POST /transfers/receive) - authenticated via bank-signed JWT (D-04)
 
         **Token Format:**
         Tokens are signed JWTs containing the userId and expiration time.
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key issued during user registration via X-API-Key response header.

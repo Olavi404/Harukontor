@@ -20,6 +20,16 @@ class UserRegistrationResponse(BaseModel):
     createdAt: datetime
 
 
+class TokenExchangeRequest(BaseModel):
+    apiKey: str | None = None
+
+
+class TokenExchangeResponse(BaseModel):
+    accessToken: str
+    tokenType: str = "Bearer"
+    expiresInSeconds: int
+
+
 class AccountCreationRequest(BaseModel):
     currency: str = Field(pattern=r"^[A-Z]{3}$")
 

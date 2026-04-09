@@ -5,14 +5,13 @@ import logging
 import re
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.exceptions import RequestValidationError
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import services
-from app.auth import generate_api_key, get_current_user_id
+from app.auth import create_user_token, generate_api_key, get_current_user_id
 from app.central_bank import (
     build_interbank_jwt,
     ensure_keys,
@@ -40,6 +39,8 @@ from app.schemas import (
     TransferResponse,
     TransferStatusResponse,
     TransfersListResponse,
+    TokenExchangeRequest,
+    TokenExchangeResponse,
     UserAccountsListResponse,
     UserProfileResponse,
     UserRegistrationRequest,
@@ -102,15 +103,6 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"code": "ERROR", "message": str(exc.detail)})
 
 
-@app.exception_handler(RequestValidationError)
-async def request_validation_exception_handler(_: Request, exc: RequestValidationError):
-    message = "Invalid request"
-    if exc.errors():
-        first = exc.errors()[0]
-        message = first.get("msg", message)
-    return JSONResponse(status_code=400, content={"code": "INVALID_REQUEST", "message": message})
-
-
 @app.get("/", tags=["System"])
 def root():
     return {
@@ -120,6 +112,35 @@ def root():
         "openapi": "/openapi.json",
         "health": "/health",
     }
+
+
+@app.post(
+    "/auth/token",
+    response_model=TokenExchangeResponse,
+    tags=["Users"],
+    responses={401: {"model": ErrorOut}},
+)
+@app.post(
+    "/api/v1/auth/token",
+    include_in_schema=False,
+    response_model=TokenExchangeResponse,
+    responses={401: {"model": ErrorOut}},
+)
+def issue_token(
+    payload: TokenExchangeRequest,
+    db: Session = Depends(get_db),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    api_key = payload.apiKey or x_api_key
+    if not api_key:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Missing API key"})
+
+    user = db.query(User).filter(User.api_key == api_key).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Invalid API key"})
+
+    token = create_user_token(user.id)
+    return TokenExchangeResponse(accessToken=token, tokenType="Bearer", expiresInSeconds=settings.user_jwt_ttl_minutes * 60)
 
 
 @app.post(

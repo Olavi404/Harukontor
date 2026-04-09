@@ -79,3 +79,12 @@ def test_user_registration_documents_api_key_response_header(client):
 
     assert "X-API-Key" in headers
     assert headers["X-API-Key"]["schema"]["type"] == "string"
+
+
+def test_openapi_documents_auth_token_exchange_endpoint(client):
+    app_spec = client.get("/openapi.json").json()
+    assert "/auth/token" in app_spec["paths"]
+
+    auth_token_post = app_spec["paths"]["/auth/token"]["post"]
+    assert auth_token_post.get("security") in (None, [])
+    assert "200" in auth_token_post["responses"]

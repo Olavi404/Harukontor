@@ -84,6 +84,7 @@ Health:
 
 ## Endpointid (Branch Bank)
 - `POST /api/v1/users`
+- `POST /api/v1/auth/token` (`X-API-Key` -> Bearer token)
 - `POST /api/v1/users/{userId}/accounts` (Bearer või `X-API-Key`)
 - `GET /api/v1/accounts/{accountNumber}`
 - `POST /api/v1/transfers` (Bearer või `X-API-Key`)
@@ -91,6 +92,7 @@ Health:
 - `GET /api/v1/transfers/{transferId}` (Bearer või `X-API-Key`)
 
 ## Auth ja turvalisus
+- Bearer tokeni saab võtta endpointist `POST /api/v1/auth/token`
 - Bearer token kasutaja toimingutele (`accounts`, `transfers`, `transfer status`)
 - API võtmega autentimine on samuti toetatud (`X-API-Key`)
 - Pankadevaheline autentimine JWT ES256 allkirjaga
