@@ -1,4 +1,4 @@
-# Branch Bank API (Keskpanga integreeritud)
+# BranchBank25 API (Keskpanga integreeritud)
 
 Täielik harukontori API implementatsioon vastavalt Branch Bank OpenAPI-le:
 - https://test.diarainfra.com/central-bank/openapi/branch-bank.yaml
@@ -151,8 +151,8 @@ Railway põhikonfiguratsioon:
 - `railway.json` (API web service)
 
 Teenuste soovituslik jaotus Railways:
-- `branch-bank-api` (web service)
-- `branch-bank-worker` (worker service)
+- `BranchBank25-api` (web service)
+- `BranchBank25-worker` (worker service)
 - `Postgres` plugin (Railway Database)
 
 ### Railway deploy sammud
