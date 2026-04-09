@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from decimal import Decimal
 import logging
 import re
@@ -50,6 +51,18 @@ from app.schemas import (
 
 settings = get_settings()
 logger = logging.getLogger("branch_bank")
+
+
+def as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def as_utc_opt(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    return as_utc(dt)
 
 
 @asynccontextmanager
@@ -109,8 +122,42 @@ def root():
     }
 
 
-@app.post("/users", status_code=201, response_model=UserRegistrationResponse, tags=["Users"], responses={400: {"model": ErrorOut}, 409: {"model": ErrorOut}})
-@app.post("/api/v1/users", include_in_schema=False, status_code=201, response_model=UserRegistrationResponse, responses={400: {"model": ErrorOut}, 409: {"model": ErrorOut}})
+@app.post(
+    "/users",
+    status_code=201,
+    response_model=UserRegistrationResponse,
+    tags=["Users"],
+    responses={
+        201: {
+            "headers": {
+                "X-API-Key": {
+                    "description": "API key for authenticating protected user operations.",
+                    "schema": {"type": "string"},
+                }
+            }
+        },
+        400: {"model": ErrorOut},
+        409: {"model": ErrorOut},
+    },
+)
+@app.post(
+    "/api/v1/users",
+    include_in_schema=False,
+    status_code=201,
+    response_model=UserRegistrationResponse,
+    responses={
+        201: {
+            "headers": {
+                "X-API-Key": {
+                    "description": "API key for authenticating protected user operations.",
+                    "schema": {"type": "string"},
+                }
+            }
+        },
+        400: {"model": ErrorOut},
+        409: {"model": ErrorOut},
+    },
+)
 def register_user(payload: UserRegistrationRequest, response: Response, db: Session = Depends(get_db)):
     if payload.email:
         existing = db.query(User).filter(User.email == payload.email).first()
@@ -124,7 +171,7 @@ def register_user(payload: UserRegistrationRequest, response: Response, db: Sess
     db.refresh(user)
     response.headers["X-API-Key"] = api_key
     logger.info("user.registered user_id=%s email=%s", user.id, user.email or "")
-    return UserRegistrationResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
+    return UserRegistrationResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=as_utc(user.created_at))
 
 
 @app.get("/api/v1/users/{userId}", include_in_schema=False, response_model=UserProfileResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
@@ -132,7 +179,7 @@ def get_user_profile(userId: str, current_user_id: str = Depends(get_current_use
     if userId != current_user_id:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own profile"})
     user = services.ensure_user_exists(db, userId)
-    return UserProfileResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
+    return UserProfileResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=as_utc(user.created_at))
 
 
 @app.get("/api/v1/users/{userId}/accounts", include_in_schema=False, response_model=UserAccountsListResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
@@ -142,14 +189,14 @@ def list_user_accounts(userId: str, current_user_id: str = Depends(get_current_u
     services.ensure_user_exists(db, userId)
     accounts = db.query(Account).filter(Account.owner_id == userId).all()
     account_summaries = [
-        AccountSummary(accountNumber=acc.account_number, currency=acc.currency, balance=f"{acc.balance:.2f}", createdAt=acc.created_at)
+        AccountSummary(accountNumber=acc.account_number, currency=acc.currency, balance=f"{acc.balance:.2f}", createdAt=as_utc(acc.created_at))
         for acc in accounts
     ]
     return UserAccountsListResponse(userId=userId, accounts=account_summaries)
 
 
-@app.post("/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, tags=["Accounts"], responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}})
-@app.post("/api/v1/users/{userId}/accounts", include_in_schema=False, status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post("/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, tags=["Accounts"], responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post("/api/v1/users/{userId}/accounts", include_in_schema=False, status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def create_account(userId: str, payload: AccountCreationRequest, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     if userId != current_user_id:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own resources"})
@@ -163,7 +210,7 @@ def create_account(userId: str, payload: AccountCreationRequest, current_user_id
     db.commit()
     db.refresh(account)
     logger.info("account.created user_id=%s account=%s currency=%s", userId, account.account_number, account.currency)
-    return AccountCreationResponse(accountNumber=account.account_number, ownerId=account.owner_id, currency=account.currency, balance=f"{account.balance:.2f}", createdAt=account.created_at)
+    return AccountCreationResponse(accountNumber=account.account_number, ownerId=account.owner_id, currency=account.currency, balance=f"{account.balance:.2f}", createdAt=as_utc(account.created_at))
 
 
 @app.get("/accounts/{accountNumber}", response_model=AccountLookupResponse, tags=["Accounts"], responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
@@ -186,6 +233,9 @@ async def initiate_transfer(payload: TransferRequest, current_user_id: str = Dep
     source_acc_num = payload.sourceAccount.upper()
     destination_acc_num = payload.destinationAccount.upper()
     amount = services.parse_amount(payload.amount)
+
+    if source_acc_num == destination_acc_num:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "Source and destination accounts must be different"})
 
     source = services.ensure_account_exists(db, source_acc_num)
     if source.owner_id != current_user_id:
@@ -212,7 +262,7 @@ async def initiate_transfer(payload: TransferRequest, current_user_id: str = Dep
             sourceAccount=transfer.source_account,
             destinationAccount=transfer.destination_account,
             amount=f"{transfer.amount:.2f}",
-            timestamp=transfer.timestamp,
+            timestamp=as_utc(transfer.timestamp),
         )
 
     destination_bank = resolve_destination_bank_from_cache(db, destination_prefix)
@@ -271,8 +321,8 @@ async def initiate_transfer(payload: TransferRequest, current_user_id: str = Dep
         amount=f"{transfer.amount:.2f}",
         convertedAmount=to_money_str(transfer.converted_amount),
         exchangeRate=to_rate_str(transfer.exchange_rate),
-        rateCapturedAt=transfer.rate_captured_at,
-        timestamp=transfer.timestamp,
+        rateCapturedAt=as_utc_opt(transfer.rate_captured_at),
+        timestamp=as_utc(transfer.timestamp),
         errorMessage=transfer.error_message,
     )
 
@@ -289,7 +339,7 @@ def receive_interbank_transfer(payload: InterBankTransferRequest, db: Session = 
 
     existing = db.get(Transfer, transfer_id)
     if existing and existing.status == "completed":
-        return InterBankTransferResponse(transferId=existing.transfer_id, status=existing.status, destinationAccount=existing.destination_account, amount=f"{existing.amount:.2f}", timestamp=existing.timestamp)
+        return InterBankTransferResponse(transferId=existing.transfer_id, status=existing.status, destinationAccount=existing.destination_account, amount=f"{existing.amount:.2f}", timestamp=as_utc(existing.timestamp))
 
     destination.balance = services.q2(destination.balance + amount)
     if existing is None:
@@ -312,7 +362,7 @@ def receive_interbank_transfer(payload: InterBankTransferRequest, db: Session = 
 
     db.refresh(transfer)
     logger.info("transfer.received transfer_id=%s destination=%s", transfer.transfer_id, transfer.destination_account)
-    return InterBankTransferResponse(transferId=transfer.transfer_id, status=transfer.status, destinationAccount=transfer.destination_account, amount=f"{transfer.amount:.2f}", timestamp=transfer.timestamp)
+    return InterBankTransferResponse(transferId=transfer.transfer_id, status=transfer.status, destinationAccount=transfer.destination_account, amount=f"{transfer.amount:.2f}", timestamp=as_utc(transfer.timestamp))
 
 
 @app.get("/transfers/{transferId}", response_model=TransferStatusResponse, tags=["Transfers"], responses={401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 423: {"model": ErrorOut}})
@@ -341,10 +391,10 @@ def get_transfer_status(transferId: str, current_user_id: str = Depends(get_curr
         amount=f"{transfer.amount:.2f}",
         convertedAmount=to_money_str(transfer.converted_amount),
         exchangeRate=to_rate_str(transfer.exchange_rate),
-        rateCapturedAt=transfer.rate_captured_at,
-        timestamp=transfer.timestamp,
-        pendingSince=transfer.pending_since,
-        nextRetryAt=transfer.next_retry_at,
+        rateCapturedAt=as_utc_opt(transfer.rate_captured_at),
+        timestamp=as_utc(transfer.timestamp),
+        pendingSince=as_utc_opt(transfer.pending_since),
+        nextRetryAt=as_utc_opt(transfer.next_retry_at),
         retryCount=transfer.retry_count,
         errorMessage=transfer.error_message,
     )
@@ -404,8 +454,8 @@ def list_transfers(
             "amount": f"{t.amount:.2f}",
             "convertedAmount": to_money_str(t.converted_amount),
             "exchangeRate": to_rate_str(t.exchange_rate),
-            "rateCapturedAt": t.rate_captured_at,
-            "timestamp": t.timestamp,
+            "rateCapturedAt": as_utc_opt(t.rate_captured_at),
+            "timestamp": as_utc(t.timestamp),
             "errorMessage": t.error_message,
         }
         for t in transfers

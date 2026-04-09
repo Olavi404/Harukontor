@@ -91,6 +91,11 @@ paths:
       responses:
         '201':
           description: User registered successfully
+          headers:
+            X-API-Key:
+              description: API key for authenticating protected user operations
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -225,6 +230,18 @@ paths:
                   value:
                     code: "UNAUTHORIZED"
                     message: "Authentication is required to create an account"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                forbidden:
+                  summary: Access denied to another user
+                  value:
+                    code: "FORBIDDEN"
+                    message: "You can only access your own resources"
         '404':
           description: User not found
           content:
@@ -338,6 +355,10 @@ paths:
 
         **Idempotency (D-05):**
         Each transfer requires a unique transferId (UUID format). Duplicate transferId values are rejected.
+
+        **Input Validation:**
+        Source and destination accounts must be different. If they are the same,
+        the API returns 400 INVALID_REQUEST.
 
         **Currency Conversion (XFER-04):**
         Cross-bank transfers convert currency at current exchange rate from central bank (D-03).

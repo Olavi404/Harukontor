@@ -69,3 +69,13 @@ def test_user_registration_response_schema_matches_contract(client):
     assert "createdAt" in properties
     assert "authToken" not in properties
     assert "apiKey" not in properties
+
+
+def test_user_registration_documents_api_key_response_header(client):
+    app_spec = client.get("/openapi.json").json()
+    users_post = app_spec["paths"]["/users"]["post"]
+    response_201 = users_post["responses"]["201"]
+    headers = response_201.get("headers", {})
+
+    assert "X-API-Key" in headers
+    assert headers["X-API-Key"]["schema"]["type"] == "string"

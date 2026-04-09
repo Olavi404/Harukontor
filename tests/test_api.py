@@ -39,6 +39,7 @@ def test_register_and_lookup_flow():
     assert register.status_code == 201
     assert register.headers.get("X-API-Key")
     user = register.json()
+    assert user["createdAt"].endswith("Z")
 
     create_account = client.post(
         f"/api/v1/users/{user['userId']}/accounts",
@@ -47,6 +48,7 @@ def test_register_and_lookup_flow():
     )
     assert create_account.status_code == 201
     account = create_account.json()
+    assert account["createdAt"].endswith("Z")
 
     lookup = client.get(f"/api/v1/accounts/{account['accountNumber']}")
     assert lookup.status_code == 200
@@ -231,6 +233,40 @@ def test_api_key_authentication_on_protected_endpoint():
         json={"currency": "EUR"},
     )
     assert create_account.status_code == 201
+
+
+def test_transfer_rejects_same_source_and_destination_account():
+    r = client.post("/api/v1/users", json={"fullName": "Same Account User"})
+    assert r.status_code == 201
+    user = r.json()
+
+    account = client.post(
+        f"/api/v1/users/{user['userId']}/accounts",
+        headers=auth_header(user["userId"]),
+        json={"currency": "EUR"},
+    ).json()
+
+    db = SessionLocal()
+    try:
+        src = db.get(Account, account["accountNumber"])
+        src.balance = Decimal("100.00")
+        db.commit()
+    finally:
+        db.close()
+
+    transfer = client.post(
+        "/api/v1/transfers",
+        headers=auth_header(user["userId"]),
+        json={
+            "transferId": "9ddbc7f0-0cc3-4b20-a5c4-42a87ce54d3e",
+            "sourceAccount": account["accountNumber"],
+            "destinationAccount": account["accountNumber"],
+            "amount": "10.00",
+        },
+    )
+    assert transfer.status_code == 400
+    body = transfer.json()
+    assert body["code"] == "INVALID_REQUEST"
 
 
 def test_multiple_users_and_same_and_cross_bank_transfers(monkeypatch):
