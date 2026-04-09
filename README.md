@@ -6,6 +6,11 @@ Täielik harukontori API implementatsioon vastavalt Branch Bank OpenAPI-le:
 Keskpanga API integratsioon:
 - https://test.diarainfra.com/central-bank/openapi/central-bank.yaml
 
+## Live URL ja Swagger UI
+- Live API: https://keskpank-production.up.railway.app
+- Swagger UI: https://keskpank-production.up.railway.app/docs
+- OpenAPI JSON: https://keskpank-production.up.railway.app/openapi.json
+
 ## Kasutatud tehnoloogiad
 - Python 3.12
 - FastAPI
@@ -15,6 +20,7 @@ Keskpanga API integratsioon:
 - PyJWT + ES256 (EC võtmed)
 - Docker Compose
 - Pytest
+- Railway deployment
 
 ## Mikroteenuste arhitektuuri kirjeldus
 Lahendus on komponendipõhine ja iseseisvalt deployeritav:
@@ -32,6 +38,10 @@ Teenustevaheline suhtlus:
 - `api` ja `worker` jagavad andmebaasi
 - `api` ja `worker` suhtlevad Keskpangaga REST API kaudu
 - Pankadevaheline ülekanne: REST + JWT ES256 allkiri (`POST /transfers/receive`)
+
+Märkus:
+- Swagger UI näitab peamist kasutajapinda kompaktse Users / Accounts / Transfers jaotisena.
+- Tegelik backend toetab ka `/api/v1/...` ühilduvusroute, et vastata lepingu ja live-keskkonna nõuetele.
 
 ## Andmebaasi skeem
 Peamised tabelid:
@@ -81,6 +91,7 @@ Health:
 
 ## Auth ja turvalisus
 - Bearer token kasutaja toimingutele (`accounts`, `transfers`, `transfer status`)
+- API võtmega autentimine on samuti toetatud (`X-API-Key`)
 - Pankadevaheline autentimine JWT ES256 allkirjaga
 - Privaat/avalik võti genereeritakse automaatselt kausta `keys/`
 - `transferId` tagab idempotentsuse
@@ -121,6 +132,10 @@ Testid sisaldavad:
 - Auth vood
 - Idempotentsus
 - Pangasisene ja pankadevaheline transferi töötlus
+- Live-käitumise kontroll
+
+Viimane teadaolev tulemus:
+- `13 passed`
 
 ## CI (GitHub Actions)
 Fail: `.github/workflows/ci.yml`
@@ -193,7 +208,7 @@ curl -X POST http://localhost:8081/api/v1/transfers \
 ```
 
 ## Live URL
-- Täida pärast deployd: `https://<your-live-url>`
+- `https://keskpank-production.up.railway.app`
 
 ## GitHub repo link
-- Täida esitamisel: `https://github.com/<username>/<repo>`
+- `https://github.com/Olavi404/Harukontor`
