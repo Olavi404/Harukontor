@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     central_bank_base_url: str = "https://test.diarainfra.com/central-bank/api/v1"
     bank_name: str = "OLL001"
     bank_public_url: str = "http://localhost:8081"
-    bank_prefix: str = "EST"
+    bank_prefix: str = "OLL"
     bank_registration_id: str | None = None
 
     supported_currencies: str = "EUR,USD,GBP,SEK"
