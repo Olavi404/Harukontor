@@ -74,7 +74,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     openapi_tags=[
-        {"name": "System", "description": "Service metadata and health endpoints"},
         {"name": "Users", "description": "User registration and profile operations"},
         {"name": "Accounts", "description": "Account creation and lookup operations"},
         {"name": "Transfers", "description": "Fund transfer operations"},
@@ -98,7 +97,7 @@ async def request_validation_exception_handler(_: Request, exc: RequestValidatio
     return JSONResponse(status_code=400, content={"code": "INVALID_REQUEST", "message": message})
 
 
-@app.get("/", tags=["System"])
+@app.get("/", include_in_schema=False)
 def root():
     return {
         "service": "Branch Bank API",
@@ -109,7 +108,8 @@ def root():
     }
 
 
-@app.post("/api/v1/users", status_code=201, response_model=UserRegistrationResponse, responses={400: {"model": ErrorOut}, 409: {"model": ErrorOut}})
+@app.post("/users", status_code=201, response_model=UserRegistrationResponse, tags=["Users"], responses={400: {"model": ErrorOut}, 409: {"model": ErrorOut}})
+@app.post("/api/v1/users", include_in_schema=False, status_code=201, response_model=UserRegistrationResponse, responses={400: {"model": ErrorOut}, 409: {"model": ErrorOut}})
 def register_user(payload: UserRegistrationRequest, response: Response, db: Session = Depends(get_db)):
     if payload.email:
         existing = db.query(User).filter(User.email == payload.email).first()
@@ -126,7 +126,7 @@ def register_user(payload: UserRegistrationRequest, response: Response, db: Sess
     return UserRegistrationResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
 
 
-@app.get("/api/v1/users/{userId}", response_model=UserProfileResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.get("/api/v1/users/{userId}", include_in_schema=False, response_model=UserProfileResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def get_user_profile(userId: str, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     if userId != current_user_id:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own profile"})
@@ -134,7 +134,7 @@ def get_user_profile(userId: str, current_user_id: str = Depends(get_current_use
     return UserProfileResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
 
 
-@app.get("/api/v1/users/{userId}/accounts", response_model=UserAccountsListResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.get("/api/v1/users/{userId}/accounts", include_in_schema=False, response_model=UserAccountsListResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def list_user_accounts(userId: str, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     if userId != current_user_id:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own accounts"})
@@ -147,7 +147,8 @@ def list_user_accounts(userId: str, current_user_id: str = Depends(get_current_u
     return UserAccountsListResponse(userId=userId, accounts=account_summaries)
 
 
-@app.post("/api/v1/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post("/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, tags=["Accounts"], responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post("/api/v1/users/{userId}/accounts", include_in_schema=False, status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def create_account(userId: str, payload: AccountCreationRequest, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     if userId != current_user_id:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own resources"})
@@ -164,7 +165,8 @@ def create_account(userId: str, payload: AccountCreationRequest, current_user_id
     return AccountCreationResponse(accountNumber=account.account_number, ownerId=account.owner_id, currency=account.currency, balance=f"{account.balance:.2f}", createdAt=account.created_at)
 
 
-@app.get("/api/v1/accounts/{accountNumber}", response_model=AccountLookupResponse, responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.get("/accounts/{accountNumber}", response_model=AccountLookupResponse, tags=["Accounts"], responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.get("/api/v1/accounts/{accountNumber}", include_in_schema=False, response_model=AccountLookupResponse, responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def lookup_account(accountNumber: str, db: Session = Depends(get_db)):
     normalized = accountNumber.upper()
     if re.fullmatch(r"^[A-Z0-9]{8}$", normalized) is None:
@@ -177,7 +179,8 @@ def lookup_account(accountNumber: str, db: Session = Depends(get_db)):
     return AccountLookupResponse(accountNumber=account.account_number, ownerName=user.full_name, currency=account.currency)
 
 
-@app.post("/api/v1/transfers", status_code=201, response_model=TransferResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 409: {"model": ErrorOut}, 422: {"model": ErrorOut}, 503: {"model": ErrorOut}})
+@app.post("/transfers", status_code=201, response_model=TransferResponse, tags=["Transfers"], responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 409: {"model": ErrorOut}, 422: {"model": ErrorOut}, 503: {"model": ErrorOut}})
+@app.post("/api/v1/transfers", include_in_schema=False, status_code=201, response_model=TransferResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 409: {"model": ErrorOut}, 422: {"model": ErrorOut}, 503: {"model": ErrorOut}})
 async def initiate_transfer(payload: TransferRequest, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     source_acc_num = payload.sourceAccount.upper()
     destination_acc_num = payload.destinationAccount.upper()
@@ -273,7 +276,8 @@ async def initiate_transfer(payload: TransferRequest, current_user_id: str = Dep
     )
 
 
-@app.post("/api/v1/transfers/receive", response_model=InterBankTransferResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post("/transfers/receive", response_model=InterBankTransferResponse, tags=["Transfers"], responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post("/api/v1/transfers/receive", include_in_schema=False, response_model=InterBankTransferResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def receive_interbank_transfer(payload: InterBankTransferRequest, db: Session = Depends(get_db)):
     claims = verify_interbank_jwt(db, payload.jwt)
     destination_account = claims["destinationAccount"].upper()
@@ -310,7 +314,8 @@ def receive_interbank_transfer(payload: InterBankTransferRequest, db: Session = 
     return InterBankTransferResponse(transferId=transfer.transfer_id, status=transfer.status, destinationAccount=transfer.destination_account, amount=f"{transfer.amount:.2f}", timestamp=transfer.timestamp)
 
 
-@app.get("/api/v1/transfers/{transferId}", response_model=TransferStatusResponse, responses={401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 423: {"model": ErrorOut}})
+@app.get("/transfers/{transferId}", response_model=TransferStatusResponse, tags=["Transfers"], responses={401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 423: {"model": ErrorOut}})
+@app.get("/api/v1/transfers/{transferId}", include_in_schema=False, response_model=TransferStatusResponse, responses={401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 423: {"model": ErrorOut}})
 def get_transfer_status(transferId: str, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     transfer = db.get(Transfer, transferId)
     if not transfer:
@@ -344,7 +349,7 @@ def get_transfer_status(transferId: str, current_user_id: str = Depends(get_curr
     )
 
 
-@app.get("/api/v1/transfers", response_model=TransfersListResponse, responses={401: {"model": ErrorOut}})
+@app.get("/api/v1/transfers", include_in_schema=False, response_model=TransfersListResponse, responses={401: {"model": ErrorOut}})
 def list_transfers(
     current_user_id: str = Depends(get_current_user_id),
     status: str | None = None,
@@ -408,7 +413,7 @@ def list_transfers(
     return TransfersListResponse(transfers=transfer_items, total=total, limit=limit, offset=offset)
 
 
-@app.get("/health", tags=["System"])
+@app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok", "service": settings.app_name}
 

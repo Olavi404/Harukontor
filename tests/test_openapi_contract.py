@@ -31,7 +31,9 @@ def test_openapi_routes_methods_security_and_status_codes(client):
     branch_ops = _operation_map(branch_spec)
 
     for (route, method), branch_op in branch_ops.items():
-        app_key = (_with_api_prefix(route), method)
+        app_key = (route, method)
+        if app_key not in app_ops:
+            app_key = (_with_api_prefix(route), method)
         assert app_key in app_ops, f"Missing operation: {app_key}"
         app_op = app_ops[app_key]
 
