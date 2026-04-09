@@ -1,5 +1,7 @@
 import os
+from datetime import datetime, timezone
 from decimal import Decimal
+from uuid import uuid4
 
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///./test.db")
 os.environ.setdefault("USER_JWT_SECRET", "test-secret")
@@ -9,8 +11,9 @@ os.environ.setdefault("CENTRAL_BANK_BASE_URL", "https://test.diarainfra.com/cent
 
 from fastapi.testclient import TestClient
 
+from app import main as app_main
 from app.auth import create_user_token
-from app.models import Account
+from app.models import Account, BankCache
 from app.database import Base, engine
 from app.database import SessionLocal
 from app.main import app
@@ -228,4 +231,91 @@ def test_api_key_authentication_on_protected_endpoint():
         json={"currency": "EUR"},
     )
     assert create_account.status_code == 201
+
+
+def test_multiple_users_and_same_and_cross_bank_transfers(monkeypatch):
+    sender = client.post("/api/v1/users", json={"fullName": "Transfer Sender", "email": "sender@example.com"})
+    same_bank_receiver = client.post("/api/v1/users", json={"fullName": "Local Receiver", "email": "local@example.com"})
+    assert sender.status_code == 201
+    assert same_bank_receiver.status_code == 201
+
+    sender_user = sender.json()
+    receiver_user = same_bank_receiver.json()
+
+    source_account = client.post(
+        f"/api/v1/users/{sender_user['userId']}/accounts",
+        headers=auth_header(sender_user["userId"]),
+        json={"currency": "USD"},
+    ).json()
+    local_destination = client.post(
+        f"/api/v1/users/{receiver_user['userId']}/accounts",
+        headers=auth_header(receiver_user["userId"]),
+        json={"currency": "USD"},
+    ).json()
+
+    db = SessionLocal()
+    try:
+        src = db.get(Account, source_account["accountNumber"])
+        src.balance = Decimal("250.00")
+        db.add(
+            BankCache(
+                bank_id="LAT002",
+                name="Latvia Test Bank",
+                address="https://latvia.example.test",
+                public_key="test-public-key",
+                last_heartbeat=datetime.now(timezone.utc),
+                status="active",
+                last_synced_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    same_bank_transfer_id = str(uuid4())
+    same_bank_transfer = client.post(
+        "/api/v1/transfers",
+        headers=auth_header(sender_user["userId"]),
+        json={
+            "transferId": same_bank_transfer_id,
+            "sourceAccount": source_account["accountNumber"],
+            "destinationAccount": local_destination["accountNumber"],
+            "amount": "25.00",
+        },
+    )
+    assert same_bank_transfer.status_code == 201
+    assert same_bank_transfer.json()["status"] == "completed"
+
+    async def fake_get_exchange_rates():
+        return ({"USD": Decimal("1.200000")}, datetime.now(timezone.utc), "EUR")
+
+    async def fake_post_interbank_transfer(destination_bank_address: str, jwt_token: str):
+        return {"status": "completed", "destinationBankAddress": destination_bank_address, "jwt": jwt_token}
+
+    monkeypatch.setattr(app_main, "get_exchange_rates", fake_get_exchange_rates)
+    monkeypatch.setattr(app_main, "post_interbank_transfer", fake_post_interbank_transfer)
+
+    cross_bank_transfer_id = str(uuid4())
+    cross_bank_transfer = client.post(
+        "/api/v1/transfers",
+        headers=auth_header(sender_user["userId"]),
+        json={
+            "transferId": cross_bank_transfer_id,
+            "sourceAccount": source_account["accountNumber"],
+            "destinationAccount": "LAT54321",
+            "amount": "50.00",
+        },
+    )
+    assert cross_bank_transfer.status_code == 201
+    cross_data = cross_bank_transfer.json()
+    assert cross_data["status"] == "completed"
+    assert cross_data["convertedAmount"] == "41.67"
+    assert cross_data["exchangeRate"] == "0.833333"
+
+    status = client.get(
+        f"/api/v1/transfers/{cross_bank_transfer_id}",
+        headers=auth_header(sender_user["userId"]),
+    )
+    assert status.status_code == 200
+    assert status.json()["status"] == "completed"
 
