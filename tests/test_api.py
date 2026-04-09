@@ -319,3 +319,76 @@ def test_multiple_users_and_same_and_cross_bank_transfers(monkeypatch):
     assert status.status_code == 200
     assert status.json()["status"] == "completed"
 
+
+def test_assignment_scenario_create_bank_account_and_transfer_to_another_bank(monkeypatch):
+    local_bank = client.post("/api/v1/users", json={"fullName": "Assignment Bank Owner", "email": "owner@example.com"})
+    destination_owner = client.post("/api/v1/users", json={"fullName": "Destination Owner", "email": "destination@example.com"})
+    assert local_bank.status_code == 201
+    assert destination_owner.status_code == 201
+
+    local_user = local_bank.json()
+    destination_user = destination_owner.json()
+
+    source_account = client.post(
+        f"/api/v1/users/{local_user['userId']}/accounts",
+        headers=auth_header(local_user["userId"]),
+        json={"currency": "EUR"},
+    ).json()
+    destination_account = client.post(
+        f"/api/v1/users/{destination_user['userId']}/accounts",
+        headers=auth_header(destination_user["userId"]),
+        json={"currency": "EUR"},
+    ).json()
+
+    db = SessionLocal()
+    try:
+        src = db.get(Account, source_account["accountNumber"])
+        src.balance = Decimal("300.00")
+        db.add(
+            BankCache(
+                bank_id="LAT001",
+                name="Latvia Demo Bank",
+                address="https://latvia.demo.test",
+                public_key="demo-public-key",
+                last_heartbeat=datetime.now(timezone.utc),
+                status="active",
+                last_synced_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_get_exchange_rates():
+        return ({"EUR": Decimal("1.000000")}, datetime.now(timezone.utc), "EUR")
+
+    async def fake_post_interbank_transfer(destination_bank_address: str, jwt_token: str):
+        return {"status": "completed", "destinationBankAddress": destination_bank_address, "jwt": jwt_token}
+
+    monkeypatch.setattr(app_main, "get_exchange_rates", fake_get_exchange_rates)
+    monkeypatch.setattr(app_main, "post_interbank_transfer", fake_post_interbank_transfer)
+
+    transfer_id = str(uuid4())
+    response = client.post(
+        "/api/v1/transfers",
+        headers=auth_header(local_user["userId"]),
+        json={
+            "transferId": transfer_id,
+            "sourceAccount": source_account["accountNumber"],
+            "destinationAccount": "LAT99887",
+            "amount": "60.00",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "completed"
+    assert payload["amount"] == "60.00"
+
+    transfer_status = client.get(
+        f"/api/v1/transfers/{transfer_id}",
+        headers=auth_header(local_user["userId"]),
+    )
+    assert transfer_status.status_code == 200
+    assert transfer_status.json()["status"] == "completed"
+
