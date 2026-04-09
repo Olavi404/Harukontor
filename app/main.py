@@ -70,6 +70,17 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"code": "ERROR", "message": str(exc.detail)})
 
 
+@app.get("/")
+def root():
+    return {
+        "service": "Branch Bank API",
+        "status": "ok",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "health": "/health",
+    }
+
+
 @app.post("/api/v1/users", status_code=201, response_model=UserRegistrationResponse, responses={400: {"model": ErrorOut}, 409: {"model": ErrorOut}})
 def register_user(payload: UserRegistrationRequest, db: Session = Depends(get_db)):
     if payload.email:
