@@ -1,0 +1,16 @@
+﻿
+Time                              Step                                Status   
+----                              ----                                ------   
+2026-04-09T11:46:24.9343982+03:00 GET /                               OK       
+2026-04-09T11:46:24.9343982+03:00 GET /health                         OK       
+2026-04-09T11:46:24.9343982+03:00 POST /api/v1/users (A)              OK       
+2026-04-09T11:46:24.9343982+03:00 POST /api/v1/users (B)              OK       
+2026-04-09T11:46:24.9343982+03:00 POST /users/{id}/accounts (A)       OK       
+2026-04-09T11:46:24.9343982+03:00 POST /users/{id}/accounts (B)       OK       
+2026-04-09T11:46:24.9343982+03:00 GET /accounts/{accountNumber}       OK       
+2026-04-09T11:46:24.9343982+03:00 POST /transfers                     EXPECT...
+2026-04-09T11:46:24.9343982+03:00 GET /transfers/{transferId}         EXPECT...
+2026-04-09T11:46:24.9343982+03:00 POST /transfers/receive invalid jwt EXPECT...
+
+
+
