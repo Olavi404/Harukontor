@@ -74,6 +74,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     openapi_tags=[
+        {"name": "System", "description": "Service metadata and health endpoints"},
         {"name": "Users", "description": "User registration and profile operations"},
         {"name": "Accounts", "description": "Account creation and lookup operations"},
         {"name": "Transfers", "description": "Fund transfer operations"},
@@ -97,7 +98,7 @@ async def request_validation_exception_handler(_: Request, exc: RequestValidatio
     return JSONResponse(status_code=400, content={"code": "INVALID_REQUEST", "message": message})
 
 
-@app.get("/", include_in_schema=False)
+@app.get("/", tags=["System"])
 def root():
     return {
         "service": "Branch Bank API",
@@ -413,7 +414,7 @@ def list_transfers(
     return TransfersListResponse(transfers=transfer_items, total=total, limit=limit, offset=offset)
 
 
-@app.get("/health", include_in_schema=False)
+@app.get("/health", tags=["System"])
 def health():
     return {"status": "ok", "service": settings.app_name}
 
