@@ -69,6 +69,7 @@ Kopeeri `.env.example` -> `.env` ja kohanda väärtused.
 Olulised väljad:
 - `CENTRAL_BANK_BASE_URL=https://test.diarainfra.com/central-bank/api/v1`
 - `BANK_PUBLIC_URL` peab viitama sinu API avalikule aadressile (kui testid päris pankadega)
+- `BANK_NAME` võib olla lühike identifikaator, näiteks `OLL001`
 
 ### 2) Docker Compose
 ```bash

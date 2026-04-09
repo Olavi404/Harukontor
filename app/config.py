@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     user_jwt_ttl_minutes: int = 120
 
     central_bank_base_url: str = "https://test.diarainfra.com/central-bank/api/v1"
-    bank_name: str = "Demo Branch Bank"
+    bank_name: str = "OLL001"
     bank_public_url: str = "http://localhost:8081"
     bank_prefix: str = "EST"
     bank_registration_id: str | None = None
