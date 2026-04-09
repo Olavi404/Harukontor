@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 import jwt
 
+from app.auth import create_user_token
 from app.models import Account, BankCache
 
 
@@ -18,10 +19,14 @@ def register_user(client, full_name: str, email: str | None = None) -> dict:
     return response.json()
 
 
+def auth_header(user_id: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {create_user_token(user_id)}"}
+
+
 def create_account(client, user: dict, currency: str = "EUR") -> dict:
     response = client.post(
         f"/api/v1/users/{user['userId']}/accounts",
-        headers={"Authorization": f"Bearer {user['authToken']}"},
+        headers=auth_header(user["userId"]),
         json={"currency": currency},
     )
     assert response.status_code == 201
@@ -51,6 +56,10 @@ def test_users_and_accounts_and_lookup_endpoints(client):
     assert data["ownerName"] == "Jane Contract"
     assert data["currency"] == "EUR"
 
+    malformed = client.get("/api/v1/accounts/BAD")
+    assert malformed.status_code == 400
+    assert malformed.json()["code"] == "INVALID_ACCOUNT_NUMBER"
+
 
 def test_transfers_and_transfer_status_endpoints(client, db_session):
     sender = register_user(client, "Sender")
@@ -64,7 +73,7 @@ def test_transfers_and_transfer_status_endpoints(client, db_session):
     transfer_id = str(uuid.uuid4())
     transfer = client.post(
         "/api/v1/transfers",
-        headers={"Authorization": f"Bearer {sender['authToken']}"},
+        headers=auth_header(sender["userId"]),
         json={
             "transferId": transfer_id,
             "sourceAccount": source["accountNumber"],
@@ -77,7 +86,7 @@ def test_transfers_and_transfer_status_endpoints(client, db_session):
 
     duplicate = client.post(
         "/api/v1/transfers",
-        headers={"Authorization": f"Bearer {sender['authToken']}"},
+        headers=auth_header(sender["userId"]),
         json={
             "transferId": transfer_id,
             "sourceAccount": source["accountNumber"],
@@ -89,7 +98,7 @@ def test_transfers_and_transfer_status_endpoints(client, db_session):
 
     status = client.get(
         f"/api/v1/transfers/{transfer_id}",
-        headers={"Authorization": f"Bearer {sender['authToken']}"},
+        headers=auth_header(sender["userId"]),
     )
     assert status.status_code == 200
     assert status.json()["status"] == "completed"

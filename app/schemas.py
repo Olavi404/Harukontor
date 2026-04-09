@@ -18,8 +18,6 @@ class UserRegistrationResponse(BaseModel):
     fullName: str
     email: EmailStr | None = None
     createdAt: datetime
-    authToken: str
-    apiKey: str
 
 
 class AccountCreationRequest(BaseModel):

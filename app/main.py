@@ -1,13 +1,15 @@
 from contextlib import asynccontextmanager
 from decimal import Decimal
+import re
 import uuid
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app import services
-from app.auth import create_user_token, generate_api_key, get_current_user_id
+from app.auth import generate_api_key, get_current_user_id
 from app.central_bank import (
     build_interbank_jwt,
     ensure_keys,
@@ -70,6 +72,15 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"code": "ERROR", "message": str(exc.detail)})
 
 
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(_: Request, exc: RequestValidationError):
+    message = "Invalid request"
+    if exc.errors():
+        first = exc.errors()[0]
+        message = first.get("msg", message)
+    return JSONResponse(status_code=400, content={"code": "INVALID_REQUEST", "message": message})
+
+
 @app.get("/")
 def root():
     return {
@@ -93,8 +104,7 @@ def register_user(payload: UserRegistrationRequest, db: Session = Depends(get_db
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_user_token(user.id)
-    return UserRegistrationResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at, authToken=token, apiKey=api_key)
+    return UserRegistrationResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
 
 
 @app.post("/api/v1/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}})
@@ -115,7 +125,11 @@ def create_account(userId: str, payload: AccountCreationRequest, current_user_id
 
 @app.get("/api/v1/accounts/{accountNumber}", response_model=AccountLookupResponse, responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def lookup_account(accountNumber: str, db: Session = Depends(get_db)):
-    account = db.get(Account, accountNumber.upper())
+    normalized = accountNumber.upper()
+    if re.fullmatch(r"^[A-Z0-9]{8}$", normalized) is None:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_ACCOUNT_NUMBER", "message": "Account number must be exactly 8 characters"})
+
+    account = db.get(Account, normalized)
     if not account:
         raise HTTPException(status_code=404, detail={"code": "ACCOUNT_NOT_FOUND", "message": f"Account with number '{accountNumber}' not found"})
     user = services.ensure_user_exists(db, account.owner_id)

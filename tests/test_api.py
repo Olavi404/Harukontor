@@ -9,6 +9,7 @@ os.environ.setdefault("CENTRAL_BANK_BASE_URL", "https://test.diarainfra.com/cent
 
 from fastapi.testclient import TestClient
 
+from app.auth import create_user_token
 from app.models import Account
 from app.database import Base, engine
 from app.database import SessionLocal
@@ -16,6 +17,10 @@ from app.main import app
 
 
 client = TestClient(app)
+
+
+def auth_header(user_id: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {create_user_token(user_id)}"}
 
 
 def setup_module():
@@ -33,7 +38,7 @@ def test_register_and_lookup_flow():
 
     create_account = client.post(
         f"/api/v1/users/{user['userId']}/accounts",
-        headers={"Authorization": f"Bearer {user['authToken']}"},
+        headers=auth_header(user["userId"]),
         json={"currency": "EUR"},
     )
     assert create_account.status_code == 201
@@ -54,12 +59,12 @@ def test_same_bank_transfer_and_status():
 
     a1 = client.post(
         f"/api/v1/users/{u1['userId']}/accounts",
-        headers={"Authorization": f"Bearer {u1['authToken']}"},
+        headers=auth_header(u1["userId"]),
         json={"currency": "EUR"},
     ).json()
     a2 = client.post(
         f"/api/v1/users/{u2['userId']}/accounts",
-        headers={"Authorization": f"Bearer {u2['authToken']}"},
+        headers=auth_header(u2["userId"]),
         json={"currency": "EUR"},
     ).json()
 
@@ -74,7 +79,7 @@ def test_same_bank_transfer_and_status():
     transfer_id = "550e8400-e29b-41d4-a716-446655440000"
     transfer = client.post(
         "/api/v1/transfers",
-        headers={"Authorization": f"Bearer {u1['authToken']}"},
+        headers=auth_header(u1["userId"]),
         json={
             "transferId": transfer_id,
             "sourceAccount": a1["accountNumber"],
@@ -86,7 +91,7 @@ def test_same_bank_transfer_and_status():
 
     status = client.get(
         f"/api/v1/transfers/{transfer_id}",
-        headers={"Authorization": f"Bearer {u1['authToken']}"},
+        headers=auth_header(u1["userId"]),
     )
     assert status.status_code == 200
     assert status.json()["status"] == "completed"

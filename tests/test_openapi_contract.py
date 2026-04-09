@@ -55,3 +55,15 @@ def test_openapi_contains_bearer_auth_security_scheme(client):
     assert "BearerAuth" in schemes
     assert schemes["BearerAuth"]["type"] == "http"
     assert schemes["BearerAuth"]["scheme"] == "bearer"
+
+
+def test_user_registration_response_schema_matches_contract(client):
+    app_spec = client.get("/openapi.json").json()
+    app_user_schema = app_spec["components"]["schemas"]["UserRegistrationResponse"]
+    properties = set(app_user_schema.get("properties", {}).keys())
+
+    assert "userId" in properties
+    assert "fullName" in properties
+    assert "createdAt" in properties
+    assert "authToken" not in properties
+    assert "apiKey" not in properties
