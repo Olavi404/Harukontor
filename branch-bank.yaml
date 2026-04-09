@@ -591,7 +591,7 @@ paths:
                 pendingTransfer:
                   summary: Transfer pending (destination bank unavailable)
                   value:
-                    transferId: "770e4033-j50e-64i7-f370-001122334455"
+                    transferId: "770e4033-a50e-46c7-b370-001122334455"
                     status: "pending"
                     sourceAccount: "EST12345"
                     destinationAccount: "LAT22222"
@@ -612,7 +612,7 @@ paths:
                 failedTransfer:
                   summary: Transfer failed
                   value:
-                    transferId: "880e3944-j64f-85h8-e261-001122334455"
+                    transferId: "880e3944-a64f-45b8-a261-001122334455"
                     status: "failed"
                     sourceAccount: "EST11111"
                     destinationAccount: "LAT22222"
@@ -622,7 +622,7 @@ paths:
                 timeoutFailedTransfer:
                   summary: Transfer failed due to timeout
                   value:
-                    transferId: "880e3944-j64f-85h8-e261-001122334455"
+                    transferId: "880e3944-a64f-45b8-a261-001122334455"
                     status: "failed_timeout"
                     sourceAccount: "EST11111"
                     destinationAccount: "LAT22222"

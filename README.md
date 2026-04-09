@@ -84,11 +84,11 @@ Health:
 
 ## Endpointid (Branch Bank)
 - `POST /api/v1/users`
-- `POST /api/v1/users/{userId}/accounts` (Bearer)
+- `POST /api/v1/users/{userId}/accounts` (Bearer või `X-API-Key`)
 - `GET /api/v1/accounts/{accountNumber}`
-- `POST /api/v1/transfers` (Bearer)
+- `POST /api/v1/transfers` (Bearer või `X-API-Key`)
 - `POST /api/v1/transfers/receive` (JWT ES256)
-- `GET /api/v1/transfers/{transferId}` (Bearer)
+- `GET /api/v1/transfers/{transferId}` (Bearer või `X-API-Key`)
 
 ## Auth ja turvalisus
 - Bearer token kasutaja toimingutele (`accounts`, `transfers`, `transfer status`)
@@ -136,7 +136,7 @@ Testid sisaldavad:
 - Live-käitumise kontroll
 
 Viimane teadaolev tulemus:
-- `13 passed`
+- Tulemused võivad haru ja keskkonna lõikes erineda; kontrolli jooksvat seisu käsuga `pytest -q`.
 
 ## CI (GitHub Actions)
 Fail: `.github/workflows/ci.yml`
