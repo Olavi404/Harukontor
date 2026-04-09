@@ -6,6 +6,7 @@ import uuid
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import services
@@ -29,12 +30,16 @@ from app.schemas import (
     AccountCreationRequest,
     AccountCreationResponse,
     AccountLookupResponse,
+    AccountSummary,
     ErrorOut,
     InterBankTransferRequest,
     InterBankTransferResponse,
     TransferRequest,
     TransferResponse,
     TransferStatusResponse,
+    TransfersListResponse,
+    UserAccountsListResponse,
+    UserProfileResponse,
     UserRegistrationRequest,
     UserRegistrationResponse,
     to_money_str,
@@ -62,7 +67,16 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Branch Bank API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Branch Bank API",
+    version="1.0.0",
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "Users", "description": "User registration and profile operations"},
+        {"name": "Accounts", "description": "Account creation and lookup operations"},
+        {"name": "Transfers", "description": "Fund transfer operations"},
+    ],
+)
 
 
 @app.exception_handler(HTTPException)
@@ -81,7 +95,7 @@ async def request_validation_exception_handler(_: Request, exc: RequestValidatio
     return JSONResponse(status_code=400, content={"code": "INVALID_REQUEST", "message": message})
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
     return {
         "service": "Branch Bank API",
@@ -105,6 +119,27 @@ def register_user(payload: UserRegistrationRequest, db: Session = Depends(get_db
     db.commit()
     db.refresh(user)
     return UserRegistrationResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
+
+
+@app.get("/api/v1/users/{userId}", response_model=UserProfileResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+def get_user_profile(userId: str, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    if userId != current_user_id:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own profile"})
+    user = services.ensure_user_exists(db, userId)
+    return UserProfileResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=user.created_at)
+
+
+@app.get("/api/v1/users/{userId}/accounts", response_model=UserAccountsListResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+def list_user_accounts(userId: str, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    if userId != current_user_id:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own accounts"})
+    services.ensure_user_exists(db, userId)
+    accounts = db.query(Account).filter(Account.owner_id == userId).all()
+    account_summaries = [
+        AccountSummary(accountNumber=acc.account_number, currency=acc.currency, balance=f"{acc.balance:.2f}", createdAt=acc.created_at)
+        for acc in accounts
+    ]
+    return UserAccountsListResponse(userId=userId, accounts=account_summaries)
 
 
 @app.post("/api/v1/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}})
@@ -298,6 +333,71 @@ def get_transfer_status(transferId: str, current_user_id: str = Depends(get_curr
     )
 
 
-@app.get("/health")
+@app.get("/api/v1/transfers", response_model=TransfersListResponse, responses={401: {"model": ErrorOut}})
+def list_transfers(
+    current_user_id: str = Depends(get_current_user_id),
+    status: str | None = None,
+    account: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    if limit < 1 or limit > 100:
+        limit = 50
+    if offset < 0:
+        offset = 0
+
+    # Get all accounts owned by user
+    user_accounts = db.query(Account).filter(Account.owner_id == current_user_id).all()
+    user_account_numbers = [acc.account_number for acc in user_accounts]
+
+    # Build query for transfers where user is source or destination
+    query = db.query(Transfer)
+    query = query.filter(
+        or_(
+            Transfer.source_account.in_(user_account_numbers),
+            Transfer.destination_account.in_(user_account_numbers)
+        )
+    )
+
+    # Filter by status if provided
+    if status:
+        query = query.filter(Transfer.status == status)
+
+    # Filter by account if provided
+    if account:
+        account_upper = account.upper()
+        query = query.filter(
+            or_(
+                Transfer.source_account == account_upper,
+                Transfer.destination_account == account_upper
+            )
+        )
+
+    # Get total count and apply pagination
+    total = query.count()
+    transfers = query.order_by(Transfer.timestamp.desc()).limit(limit).offset(offset).all()
+
+    transfer_items = [
+        {
+            "transferId": t.transfer_id,
+            "status": t.status,
+            "sourceAccount": t.source_account,
+            "destinationAccount": t.destination_account,
+            "amount": f"{t.amount:.2f}",
+            "convertedAmount": to_money_str(t.converted_amount),
+            "exchangeRate": to_rate_str(t.exchange_rate),
+            "rateCapturedAt": t.rate_captured_at,
+            "timestamp": t.timestamp,
+            "errorMessage": t.error_message,
+        }
+        for t in transfers
+    ]
+
+    return TransfersListResponse(transfers=transfer_items, total=total, limit=limit, offset=offset)
+
+
+@app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok", "service": settings.app_name}
+

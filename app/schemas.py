@@ -82,6 +82,36 @@ class ExchangeRatesResponse(BaseModel):
     timestamp: datetime
 
 
+class UserProfileResponse(BaseModel):
+    userId: str
+    fullName: str
+    email: EmailStr | None = None
+    createdAt: datetime
+
+
+class AccountSummary(BaseModel):
+    accountNumber: str
+    currency: str
+    balance: str
+    createdAt: datetime
+
+
+class UserAccountsListResponse(BaseModel):
+    userId: str
+    accounts: list[AccountSummary]
+
+
+class TransferListItem(TransferResponse):
+    pass
+
+
+class TransfersListResponse(BaseModel):
+    transfers: list[TransferListItem]
+    total: int
+    limit: int
+    offset: int
+
+
 def to_money_str(v: Decimal | None) -> str | None:
     if v is None:
         return None
