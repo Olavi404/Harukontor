@@ -93,8 +93,9 @@ Health:
 
 ## Auth ja turvalisus
 - Bearer tokeni saab võtta endpointist `POST /api/v1/auth/token`
-- Bearer token kasutaja toimingutele (`accounts`, `transfers`, `transfer status`)
-- API võtmega autentimine on samuti toetatud (`X-API-Key`)
+- Kaitstud endpointid (`/users/{userId}/accounts`, `/transfers`, `/transfers/{transferId}`) aktsepteerivad `Authorization: Bearer <token>`.
+- Samad endpointid aktsepteerivad ka `X-API-Key: <api_key>`.
+- Bearer ja API võtme meetodid on OpenAPI security osas mõlemad dokumenteeritud.
 - Pankadevaheline autentimine JWT ES256 allkirjaga
 - Privaat/avalik võti genereeritakse automaatselt kausta `keys/`
 - `transferId` tagab idempotentsuse
@@ -113,7 +114,7 @@ Health:
 Lepingu katmine on lisatud kahe kihina:
 - `tests/test_openapi_contract.py`
   - kontrollib, et FastAPI genereeritud OpenAPI sisaldab kõiki `branch-bank.yaml` radu/meetodeid
-  - kontrollib BearerAuth security skeemi ja endpointide auth nõudeid
+  - kontrollib BearerAuth + ApiKeyAuth security skeeme ja endpointide auth nõudeid
   - kontrollib, et nõutud HTTP vastusekoodid on olemas
 - `tests/test_runtime_contract.py`
   - katab runtime käitumise kõigi endpointide jaoks:

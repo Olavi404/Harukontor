@@ -118,6 +118,7 @@ def root():
     "/auth/token",
     response_model=TokenExchangeResponse,
     tags=["Users"],
+    description="Exchange X-API-Key for a Bearer JWT. Provide apiKey in request body or X-API-Key header.",
     responses={401: {"model": ErrorOut}},
 )
 @app.post(
@@ -216,7 +217,14 @@ def list_user_accounts(userId: str, current_user_id: str = Depends(get_current_u
     return UserAccountsListResponse(userId=userId, accounts=account_summaries)
 
 
-@app.post("/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, tags=["Accounts"], responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post(
+    "/users/{userId}/accounts",
+    status_code=201,
+    response_model=AccountCreationResponse,
+    tags=["Accounts"],
+    description="Authentication: use either Authorization: Bearer <token> or X-API-Key: <api_key>.",
+    responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}},
+)
 @app.post("/api/v1/users/{userId}/accounts", include_in_schema=False, status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def create_account(userId: str, payload: AccountCreationRequest, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     if userId != current_user_id:
@@ -249,7 +257,14 @@ def lookup_account(accountNumber: str, db: Session = Depends(get_db)):
     return AccountLookupResponse(accountNumber=account.account_number, ownerName=user.full_name, currency=account.currency)
 
 
-@app.post("/transfers", status_code=201, response_model=TransferResponse, tags=["Transfers"], responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 409: {"model": ErrorOut}, 422: {"model": ErrorOut}, 503: {"model": ErrorOut}})
+@app.post(
+    "/transfers",
+    status_code=201,
+    response_model=TransferResponse,
+    tags=["Transfers"],
+    description="Authentication: use either Authorization: Bearer <token> or X-API-Key: <api_key>.",
+    responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 409: {"model": ErrorOut}, 422: {"model": ErrorOut}, 503: {"model": ErrorOut}},
+)
 @app.post("/api/v1/transfers", include_in_schema=False, status_code=201, response_model=TransferResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 409: {"model": ErrorOut}, 422: {"model": ErrorOut}, 503: {"model": ErrorOut}})
 async def initiate_transfer(payload: TransferRequest, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     source_acc_num = payload.sourceAccount.upper()
@@ -387,7 +402,13 @@ def receive_interbank_transfer(payload: InterBankTransferRequest, db: Session = 
     return InterBankTransferResponse(transferId=transfer.transfer_id, status=transfer.status, destinationAccount=transfer.destination_account, amount=f"{transfer.amount:.2f}", timestamp=as_utc(transfer.timestamp))
 
 
-@app.get("/transfers/{transferId}", response_model=TransferStatusResponse, tags=["Transfers"], responses={401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 423: {"model": ErrorOut}})
+@app.get(
+    "/transfers/{transferId}",
+    response_model=TransferStatusResponse,
+    tags=["Transfers"],
+    description="Authentication: use either Authorization: Bearer <token> or X-API-Key: <api_key>.",
+    responses={401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 423: {"model": ErrorOut}},
+)
 @app.get("/api/v1/transfers/{transferId}", include_in_schema=False, response_model=TransferStatusResponse, responses={401: {"model": ErrorOut}, 404: {"model": ErrorOut}, 423: {"model": ErrorOut}})
 def get_transfer_status(transferId: str, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     transfer = db.get(Transfer, transferId)

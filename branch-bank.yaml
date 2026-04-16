@@ -206,7 +206,9 @@ paths:
         **Currency Support:**
         Branch banks typically support major currencies. The requested currency must be one that the bank supports.
 
-        **Note:** This endpoint requires the user to be authenticated (e.g., via session token or API key).
+        **Authentication Options (either one):**
+        - `Authorization: Bearer <token>`
+        - `X-API-Key: <api_key>`
       operationId: createAccount
       security:
         - BearerAuth: []
@@ -404,6 +406,10 @@ paths:
       summary: Initiate a fund transfer
       description: |
         Initiates a fund transfer from a source account to a destination account.
+
+        **Authentication Options (either one):**
+        - `Authorization: Bearer <token>`
+        - `X-API-Key: <api_key>`
 
         **Routing (D-01):**
         Branch bank determines routing by inspecting destination account's bank prefix (first 3 characters).
@@ -625,6 +631,10 @@ paths:
       description: |
         Retrieves the current status and details of a transfer.
         Decision DEC-04: Include this endpoint in Phase 2.
+
+        **Authentication Options (either one):**
+        - `Authorization: Bearer <token>`
+        - `X-API-Key: <api_key>`
       operationId: getTransferStatus
       security:
         - BearerAuth: []

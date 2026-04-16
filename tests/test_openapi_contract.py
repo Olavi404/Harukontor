@@ -44,6 +44,8 @@ def test_openapi_routes_methods_security_and_status_codes(client):
         else:
             assert app_security is not None, f"Operation {app_key} should require auth"
             assert {"BearerAuth": []} in app_security, f"Operation {app_key} must use BearerAuth"
+            if isinstance(branch_security, list) and {"ApiKeyAuth": []} in branch_security:
+                assert {"ApiKeyAuth": []} in app_security, f"Operation {app_key} must support ApiKeyAuth"
 
         branch_codes = set(branch_op.get("responses", {}).keys())
         app_codes = set(app_op.get("responses", {}).keys())
@@ -57,6 +59,15 @@ def test_openapi_contains_bearer_auth_security_scheme(client):
     assert "BearerAuth" in schemes
     assert schemes["BearerAuth"]["type"] == "http"
     assert schemes["BearerAuth"]["scheme"] == "bearer"
+
+
+def test_openapi_contains_api_key_auth_security_scheme(client):
+    app_spec = client.get("/openapi.json").json()
+    schemes = app_spec["components"]["securitySchemes"]
+    assert "ApiKeyAuth" in schemes
+    assert schemes["ApiKeyAuth"]["type"] == "apiKey"
+    assert schemes["ApiKeyAuth"]["in"] == "header"
+    assert schemes["ApiKeyAuth"]["name"] == "X-API-Key"
 
 
 def test_user_registration_response_schema_matches_contract(client):
