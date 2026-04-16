@@ -11,6 +11,28 @@ Keskpanga API integratsioon:
 - Swagger UI: https://keskpank-production.up.railway.app/docs
 - OpenAPI JSON: https://keskpank-production.up.railway.app/openapi.json
 
+## Kiirjuhend tavakasutajale
+Kui soovid lihtsalt proovida, kas pank toimib, siis kasuta seda lihtsat järjekorda:
+
+1. Ava Swagger: https://keskpank-production.up.railway.app/docs
+2. Loo kasutaja endpointiga POST /users
+3. Kopeeri vastuse headerist X-API-Key
+4. Loo konto endpointiga POST /users/{userId}/accounts ja lisa header X-API-Key
+5. Kontrolli kontot endpointiga GET /accounts/{accountNumber}
+
+Kui tahad teha ülekannet:
+
+1. Loo teine konto (teisele kasutajale)
+2. Kasuta POST /transfers
+3. Vaata tulemust endpointiga GET /transfers/{transferId}
+
+Autentimine lihtsas keeles:
+- X-API-Key: kõige lihtsam variant, sobib kohe kasutamiseks
+- Bearer token: valikuline variant, selle saad endpointist POST /auth/token
+
+Praktiline soovitus:
+- Tavakasutajale on kõige lihtsam kasutada ainult X-API-Key meetodit.
+
 ## Kasutatud tehnoloogiad
 - Python 3.12
 - FastAPI
@@ -28,7 +50,7 @@ Lahendus on komponendipõhine ja iseseisvalt deployeritav:
    - Avalikud endpointid (`/api/v1/...`) branch-bank lepingu järgi
    - Kasutaja-, konto- ja ülekandeloogika
 2. `worker` teenus
-   - Heartbeat loop keskpangale
+  - Heartbeat loop keskpangale (vahemik max 30 min)
    - Pankade vahemälu sünkroniseerimine
    - Pending ülekannete retry exponential backoffiga
 3. `postgres` teenus
@@ -70,6 +92,7 @@ Olulised väljad:
 - `CENTRAL_BANK_BASE_URL=https://test.diarainfra.com/central-bank/api/v1`
 - `BANK_PUBLIC_URL` peab viitama sinu API avalikule aadressile (kui testid päris pankadega)
 - `BANK_NAME` võib olla lühike identifikaator, näiteks `OLL001`
+- `HEARTBEAT_INTERVAL_SECONDS` peab olema <= `1800` (30 min), et pank registrist välja ei kukuks
 
 ### 2) Docker Compose
 ```bash

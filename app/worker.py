@@ -18,9 +18,23 @@ from app import services
 
 settings = get_settings()
 logger = logging.getLogger("branch_bank.worker")
+MAX_HEARTBEAT_INTERVAL_SECONDS = 30 * 60
+
+
+def heartbeat_interval_seconds() -> int:
+    configured = max(1, int(settings.heartbeat_interval_seconds))
+    if configured > MAX_HEARTBEAT_INTERVAL_SECONDS:
+        logger.warning(
+            "worker.heartbeat.interval_clamped configured=%s clamped=%s",
+            configured,
+            MAX_HEARTBEAT_INTERVAL_SECONDS,
+        )
+        return MAX_HEARTBEAT_INTERVAL_SECONDS
+    return configured
 
 
 async def heartbeat_loop() -> None:
+    sleep_seconds = heartbeat_interval_seconds()
     while True:
         db = SessionLocal()
         try:
@@ -29,7 +43,7 @@ async def heartbeat_loop() -> None:
             logger.warning("worker.heartbeat.failed error=%s", exc)
         finally:
             db.close()
-        await asyncio.sleep(settings.heartbeat_interval_seconds)
+        await asyncio.sleep(sleep_seconds)
 
 
 async def sync_loop() -> None:
