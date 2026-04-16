@@ -1,4 +1,7 @@
+import re
+
 from functools import lru_cache
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +31,14 @@ class Settings(BaseSettings):
     bank_sync_interval_seconds: int = 300
     pending_retry_poll_seconds: int = 30
     pending_timeout_hours: int = 4
+
+    @field_validator("bank_prefix")
+    @classmethod
+    def validate_bank_prefix(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if re.fullmatch(r"[A-Z0-9]{3}", normalized) is None:
+            raise ValueError("BANK_PREFIX must be exactly 3 uppercase letters/digits")
+        return normalized
 
 
 @lru_cache
