@@ -8,6 +8,7 @@ from app.central_bank import (
     post_interbank_transfer,
     refresh_banks_cache,
     resolve_destination_bank_from_cache,
+    register_bank,
     send_heartbeat,
 )
 from app.config import get_settings
@@ -19,6 +20,13 @@ from app import services
 settings = get_settings()
 logger = logging.getLogger("branch_bank.worker")
 MAX_HEARTBEAT_INTERVAL_SECONDS = 30 * 60
+
+
+async def ensure_bank_registered(db) -> str:
+    try:
+        return get_local_bank_id(db)
+    except Exception:
+        return await register_bank(db)
 
 
 def heartbeat_interval_seconds() -> int:
@@ -38,6 +46,7 @@ async def heartbeat_loop() -> None:
     while True:
         db = SessionLocal()
         try:
+            await ensure_bank_registered(db)
             await send_heartbeat(db)
         except Exception as exc:
             logger.warning("worker.heartbeat.failed error=%s", exc)
@@ -110,6 +119,11 @@ async def pending_retry_loop() -> None:
 
 async def main() -> None:
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        await ensure_bank_registered(db)
+    finally:
+        db.close()
     await asyncio.gather(heartbeat_loop(), sync_loop(), pending_retry_loop())
 
 
