@@ -105,6 +105,10 @@ API on vaikimisi:
 Health:
 - `GET /health`
 
+## Integratsioonide Dokumentatsioon
+Detailne dokumentatsioon harukontori API integratsioonide kohta, sh liidestused Keskpangaga ja teiste pankadega:
+- [INTEGRATIONS.md](INTEGRATIONS.md) - Liidestused, turvalisus, autentimine, skeemid
+
 ## Endpointid (Branch Bank)
 - `POST /api/v1/users`
 - `POST /api/v1/auth/token` (`X-API-Key` -> Bearer token)
