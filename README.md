@@ -7,9 +7,9 @@ Keskpanga API integratsioon:
 - https://test.diarainfra.com/central-bank/openapi/central-bank.yaml
 
 ## Live URL ja Swagger UI
-- Live API: https://keskpank-production.up.railway.app
-- Swagger UI: https://keskpank-production.up.railway.app/docs
-- OpenAPI JSON: https://keskpank-production.up.railway.app/openapi.json
+ Live API: https://harukontor.onrender.com
+ Swagger UI: https://harukontor.onrender.com/docs
+ OpenAPI JSON: https://harukontor.onrender.com/openapi.json
 
 ## Kiirjuhend tavakasutajale
 Kui soovid lihtsalt proovida, kas pank toimib, siis kasuta seda lihtsat järjekorda:
