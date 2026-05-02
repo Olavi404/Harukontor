@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: keskpank-api
+    env: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+
+  - type: worker
+    name: keskpank-worker
+    env: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.worker
+    autoDeploy: true
+
+# Notes:
+# - After pushing this file to GitHub, connect the repository in Render and
+#   Render will create the two services automatically (you still need to set
+#   environment variables in the Render dashboard: DATABASE_URL, SECRET_KEY,
+#   CENTRAL_BANK_BASE_URL, BANK_PREFIX, BANK_PUBLIC_URL, etc.).
