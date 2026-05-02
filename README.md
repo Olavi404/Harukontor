@@ -14,7 +14,7 @@ Keskpanga API integratsioon:
 ## Kiirjuhend tavakasutajale
 Kui soovid lihtsalt proovida, kas pank toimib, siis kasuta seda lihtsat järjekorda:
 
-1. Ava Swagger: https://keskpank-production.up.railway.app/docs
+1. Ava Swagger: https://harukontor.onrender.com/docs
 2. Loo kasutaja endpointiga POST /users
 3. Kopeeri vastuse headerist X-API-Key
 4. Loo konto endpointiga POST /users/{userId}/accounts ja lisa header X-API-Key
@@ -239,7 +239,7 @@ curl -X POST http://localhost:8081/api/v1/transfers \
 ```
 
 ## Live URL
-- `https://keskpank-production.up.railway.app`
+- `https://harukontor.onrender.com`
 
 ## GitHub repo link
 - `https://github.com/Olavi404/Harukontor`
