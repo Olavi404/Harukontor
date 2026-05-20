@@ -113,7 +113,22 @@ Detailne dokumentatsioon harukontori API integratsioonide kohta, sh liidestused 
 - `POST /api/v1/users`
 - `POST /api/v1/auth/token` (`X-API-Key` -> Bearer token)
 - `POST /api/v1/users/{userId}/accounts` (Bearer või `X-API-Key`)
-- `GET /api/v1/accounts/{accountNumber}`
+- `GET /api/v1/accounts/{accountNumber}` — Account lookup (public or authenticated)
+  - **Public lookup:** returns `accountNumber`, `ownerName`, `currency` (no balance).
+  - **Authenticated owner:** same endpoint returns full info including `balance` and `ownerId` when called by the account owner (requires `Authorization: Bearer <token>` or `X-API-Key`).
+
+  **Examples (curl):**
+
+  ```bash
+  # Public lookup (no auth required)
+  curl -sS https://harukontor.onrender.com/api/v1/accounts/OLL12345
+
+  # Authenticated with Bearer token (see balance if owner)
+  curl -sS -H "Authorization: Bearer $TOKEN" https://harukontor.onrender.com/api/v1/accounts/OLL12345
+
+  # Authenticated with API key (see balance if owner)
+  curl -sS -H "X-API-Key: $API_KEY" https://harukontor.onrender.com/api/v1/accounts/OLL12345
+  ```
 - `POST /api/v1/transfers` (Bearer või `X-API-Key`)
 - `POST /api/v1/transfers/receive` (JWT ES256)
 - `GET /api/v1/transfers/{transferId}` (Bearer või `X-API-Key`)
@@ -180,34 +195,30 @@ Iga push/pull request käivitab:
 Railway põhikonfiguratsioon:
 - `railway.json` (API web service)
 
-Teenuste soovituslik jaotus Railways:
-- `BranchBank25-api` (web service)
-- `BranchBank25-worker` (worker service)
-- `Postgres` plugin (Railway Database)
+Teenuste automaatne jaotus Render-is:
+- `keskpank-api` (API web service)
+- `keskpank-worker` (worker service)
+- PostgreSQL (Render Database)
 
-### Railway deploy sammud
+Konfiguratsioon failides:
+- `render.yaml` — Render deployment konfiguratsion (automatiseeritud service loomine)
+- `.env.example` — keskkonna muutujad
+
+### Render deploy sammud
 1. Push repo GitHubi.
-2. Railways vali **New Project** -> **Deploy from GitHub Repo**.
-3. Loo esimene service API jaoks samast repost (kasutab `railway.json`).
-4. Lisa samasse projekti Postgres plugin.
-5. Loo teine service workeri jaoks samast repost.
-6. Worker service `Start Command`:
-  - `python -m app.worker`
-7. Sea mõlemale service'ile keskkonnamuutujad:
-  - `DATABASE_URL` (Railway Postgres connection string)
-  - `CENTRAL_BANK_BASE_URL=https://test.diarainfra.com/central-bank/api/v1`
-  - `BANK_NAME`
-  - `BANK_PREFIX`
-  - `USER_JWT_SECRET`
-  - `SUPPORTED_CURRENCIES`
-  - `BANK_PUBLIC_URL` (API avalik URL, nt `https://<api-service>.up.railway.app`)
-8. Pärast deployd kontrolli:
-  - `GET /health`
-  - `POST /api/v1/users`
-
-### Live URL vorm
-- API URL: `https://<api-service>.up.railway.app`
-- Lisa see esitusele README-sse "Live URL" alla.
+2. Render.com vali **New** > **Web Service** ja ühenda GitHub repo.
+3. Render loob automatiseeritud deploy `render.yaml`-i järgi (API ja worker services).
+4. Postgres: Render Database lisamine ja `DATABASE_URL` environment variable.
+5. Sea mõlemale service'ile (API ja worker) keskkonnamuutujad:
+   - `CENTRAL_BANK_BASE_URL=https://test.diarainfra.com/central-bank/api/v1`
+   - `BANK_NAME`
+   - `BANK_PREFIX`
+   - `USER_JWT_SECRET`
+   - `SUPPORTED_CURRENCIES`
+   - `BANK_PUBLIC_URL` (API avalik URL, nt `https://harukontor.onrender.com`)
+6. Pärast deployd kontrolli:
+   - `GET /health`
+   - `POST /api/v1/users`
 
 ## Näidispäringud
 Registreerimine:

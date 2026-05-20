@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 import secrets
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
 from sqlalchemy.orm import Session
@@ -60,3 +60,27 @@ def require_user(user_id: str, current_user_id: str = Depends(get_current_user_i
     if user_id != current_user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "FORBIDDEN", "message": "You can only access your own resources"})
     return current_user_id
+
+
+def get_optional_current_user_id(request: Request, db: Session = Depends(get_db)) -> str | None:
+    """Try to authenticate using Authorization or X-API-Key headers; return None if none provided.
+
+    This function reads headers directly instead of using FastAPI security dependencies
+    so it does not add security requirements to OpenAPI for endpoints that use it.
+    """
+    auth_header = request.headers.get("authorization")
+    if auth_header:
+        # Expect "Bearer <token>"
+        parts = auth_header.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1]
+            return decode_user_token(token)
+
+    api_key = request.headers.get("x-api-key")
+    if api_key:
+        user = db.query(User).filter(User.api_key == api_key).first()
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "UNAUTHORIZED", "message": "Invalid API key"})
+        return user.id
+
+    return None

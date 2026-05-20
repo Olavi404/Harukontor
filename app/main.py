@@ -11,7 +11,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import services
-from app.auth import create_user_token, generate_api_key, get_current_user_id
+from app.auth import create_user_token, generate_api_key, get_current_user_id, get_optional_current_user_id
 from app.central_bank import (
     build_interbank_jwt,
     ensure_keys,
@@ -204,7 +204,7 @@ def get_user_profile(userId: str, current_user_id: str = Depends(get_current_use
     return UserProfileResponse(userId=user.id, fullName=user.full_name, email=user.email, createdAt=as_utc(user.created_at))
 
 
-@app.get("/api/v1/users/{userId}/accounts", include_in_schema=False, response_model=UserAccountsListResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.get("/api/v1/users/{userId}/accounts", response_model=UserAccountsListResponse, responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def list_user_accounts(userId: str, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     if userId != current_user_id:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own accounts"})
@@ -225,7 +225,7 @@ def list_user_accounts(userId: str, current_user_id: str = Depends(get_current_u
     description="Authentication: use either Authorization: Bearer <token> or X-API-Key: <api_key>.",
     responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}},
 )
-@app.post("/api/v1/users/{userId}/accounts", include_in_schema=False, status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+@app.post("/api/v1/users/{userId}/accounts", status_code=201, response_model=AccountCreationResponse, responses={400: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 404: {"model": ErrorOut}})
 def create_account(userId: str, payload: AccountCreationRequest, current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
     if userId != current_user_id:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only access your own resources"})
@@ -244,8 +244,8 @@ def create_account(userId: str, payload: AccountCreationRequest, current_user_id
 
 
 @app.get("/accounts/{accountNumber}", response_model=AccountLookupResponse, tags=["Accounts"], responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
-@app.get("/api/v1/accounts/{accountNumber}", include_in_schema=False, response_model=AccountLookupResponse, responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
-def lookup_account(accountNumber: str, db: Session = Depends(get_db)):
+@app.get("/api/v1/accounts/{accountNumber}", response_model=AccountLookupResponse, responses={400: {"model": ErrorOut}, 404: {"model": ErrorOut}})
+def lookup_account(accountNumber: str, db: Session = Depends(get_db), current_user_id: str | None = Depends(get_optional_current_user_id)):
     normalized = accountNumber.upper()
     if re.fullmatch(r"^[A-Z0-9]{8}$", normalized) is None:
         raise HTTPException(status_code=400, detail={"code": "INVALID_ACCOUNT_NUMBER", "message": "Account number must be exactly 8 characters"})
@@ -254,6 +254,17 @@ def lookup_account(accountNumber: str, db: Session = Depends(get_db)):
     if not account:
         raise HTTPException(status_code=404, detail={"code": "ACCOUNT_NOT_FOUND", "message": f"Account with number '{accountNumber}' not found"})
     user = services.ensure_user_exists(db, account.owner_id)
+
+    # If caller is the owner (authenticated), include balance and ownerId
+    if current_user_id is not None and current_user_id == account.owner_id:
+        return AccountLookupResponse(
+            accountNumber=account.account_number,
+            ownerName=user.full_name,
+            currency=account.currency,
+            balance=f"{account.balance:.2f}",
+            ownerId=account.owner_id,
+        )
+
     return AccountLookupResponse(accountNumber=account.account_number, ownerName=user.full_name, currency=account.currency)
 
 

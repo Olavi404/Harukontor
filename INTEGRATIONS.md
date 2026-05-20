@@ -31,6 +31,28 @@ Panga harukontori API suhtleb järgmiste süsteemidega:
 - POST /api/v1/transfers - Ülekande alustamine (pangasisene VÖI pankadevaheline)
 - GET /api/v1/transfers/{transferId} - Ülekande staatuse kontrollimine
 - GET /api/v1/accounts/{accountNumber} - Konto avalike andmete küsimine
+  - Public lookup: returns `accountNumber`, `ownerName`, `currency` (no balance)
+  - Authenticated owner: same endpoint `GET /api/v1/accounts/{accountNumber}` returns `balance` and `ownerId` when caller is the account owner.
+
+Examples (curl):
+
+- Public lookup (no auth):
+
+```bash
+curl -sS https://harukontor.onrender.com/api/v1/accounts/OLL12345
+```
+
+- Authenticated owner lookup (Bearer token):
+
+```bash
+curl -sS -H "Authorization: Bearer $TOKEN" https://harukontor.onrender.com/api/v1/accounts/OLL12345
+```
+
+- Authenticated owner lookup (API key):
+
+```bash
+curl -sS -H "X-API-Key: $API_KEY" https://harukontor.onrender.com/api/v1/accounts/OLL12345
+```
 
 ### Harukontori API ja Keskpanga API vahel
 

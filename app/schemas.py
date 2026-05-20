@@ -46,6 +46,8 @@ class AccountLookupResponse(BaseModel):
     accountNumber: str
     ownerName: str
     currency: str
+    balance: str | None = None
+    ownerId: str | None = None
 
 
 class TransferRequest(BaseModel):
